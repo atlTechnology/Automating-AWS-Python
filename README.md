@@ -9,3 +9,10 @@ Automating AWS with python
 
 This is a script that will sync a local directory to S3 and optionally
 configure route53 and cloudfront
+
+### Feature
+
+Webotron currently has the following features:
+
+- List bucket
+- List contents of a bucket
