@@ -1,43 +1,68 @@
-import boto3
-import click
-from botocore.exceptions import ClientError
+#!/usr/bin/pythonAutomation
+# -*- coding: utf-8 -*-
+
+"""Webotron: Deploy websites with AWS.
+
+Webotron automates the process of deploying static websites
+- Configure AWS s3 buckets
+    - Create them
+    - Set them up
+    - Deploy local files  to them
+- Configure DNS with AWS Route 53
+- Configure a Content delivery Network and SSL with AWS
+"""
+
 from pathlib import Path
 import mimetypes
+
+import boto3
+from botocore.exceptions import ClientError
+import click
+
 
 session = boto3.Session(profile_name='pythonAutomation')
 s3 = session.resource('s3')
 
+
 @click.group()
 def cli():
-    "Webotron deploys websites to AWS"
+    """Webotron deploys websites to AWS."""
     pass
+
 
 @cli.command('list-buckets')
 def list_bucket():
-    "List all s3 bucket"
+    """List all s3 bucket."""
     for bucket in s3.buckets.all():
         print(bucket)
+
 
 @cli.command('list-buckets-object')
 @click.argument('bucket')
 def list_bucket_objects(bucket):
-    "List objects in a s3 bucket"
+    """List objects in a s3 bucket."""
     for obj in s3.Bucket(bucket).objects.all():
         print(obj)
+
 
 @cli.command('setup-bucket')
 @click.argument('bucket')
 def setup_bucket(bucket):
-    "Create and configure S3 bucket"
+    """Create and configure S3 bucket."""
     s3_bucket = None
 
     try:
-        s3_bucket = s3.create_bucket(Bucket=bucket,CreateBucketConfiguration={'LocationConstraint': session.region_name})
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
+        s3_bucket = s3.create_bucket(
+            Bucket=bucket,
+            CreateBucketConfiguration={
+                'LocationConstraint': session.region_name
+            }
+        )
+    except ClientError as error:
+        if error.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
             s3_bucket = s3.Bucket(bucket)
         else:
-            raise e
+            raise error
 
     policy = """
     {
@@ -59,8 +84,7 @@ def setup_bucket(bucket):
     pol = s3_bucket.Policy()
     pol.put(Policy=policy)
 
-    ws = s3_bucket.Website()
-    ws.put(WebsiteConfiguration={
+    s3_bucket.Website().put(WebsiteConfiguration={
         'ErrorDocument': {
             'Key': 'error.html'
         },
@@ -71,13 +95,15 @@ def setup_bucket(bucket):
 
     return
 
+
 def upload_file(s3_bucket, path, key):
-    ContentType = mimetypes.guess_type(key)[0] or 'text/plain'
+    """Upload file to S3."""
+    contentType = mimetypes.guess_type(key)[0] or 'text/plain'
     s3_bucket.upload_file(
         path,
         key,
         ExtraArgs={
-            'ContentType': 'text/html'
+            'ContentType': contentType
         })
 
 
@@ -85,14 +111,16 @@ def upload_file(s3_bucket, path, key):
 @click.argument('pathname', type=click.Path(exists=True))
 @click.argument('bucket')
 def sync(pathname, bucket):
-    "Sync contents of PATHNAME to BUCKET"
+    """Sync contents of PATHNAME to BUCKET."""
     s3_bucket = s3.Bucket(bucket)
     root = Path(pathname).expanduser().resolve()
 
     def handle_directory(target):
         for p in target.iterdir():
-            if p.is_dir(): handle_directory(p)
-            if p.is_file(): upload_file(s3_bucket, str(p), str(p.relative_to(root)))
+            if p.is_dir():
+                handle_directory(p)
+            if p.is_file():
+                upload_file(s3_bucket, str(p), str(p.relative_to(root)))
 
     handle_directory(root)
 
